@@ -11,12 +11,12 @@ title: 首页
 
 ## ✨ 核心特性
 
-- 🔄 **存储后端无关** — 同一套锁逻辑可运行在 50+ 种不同的存储后端上
+- 🔄 **存储后端无关** — 同一套锁逻辑可跑在 60+ 种存储实现上；实际可用性取决于该后端是否满足单 key 线性一致 CAS 与可靠时间源
 - 🔁 **可重入锁** — 支持同一持有者多次获取同一把锁，按加锁次数释放
 - 🔒 **乐观锁（CAS）** — 基于版本号的乐观锁机制，避免 ABA 问题
 - 🐕 **看门狗（Watch Dog）** — 自动续期机制，防止业务未完成时锁过期
 - 📡 **事件通知** — 锁的获取、释放等事件可通过事件监听器处理
-- 📊 **监控集成** — 内置 Prometheus 指标支持
+- 📊 **可观测性** — 核心提供进程内事件计数（`LockMetrics`），另可接入 `go-storage-lock-prometheus` / `-otel` / `-auditlog` 导出
 
 ---
 
@@ -28,7 +28,7 @@ title: 首页
 go get -u github.com/storage-lock/go-storage-lock
 ```
 
-### 使用示例（以 MySQL 为例）
+### 使用示例（以内存存储为例，单进程演示）
 
 ```go
 package main
@@ -37,40 +37,40 @@ import (
     "context"
     "log"
 
-    mysql_storage "github.com/storage-lock/go-mysql-storage"
-    mysql_locks "github.com/storage-lock/go-mysql-locks"
+    "github.com/storage-lock/go-memory-storage"
     storage_lock "github.com/storage-lock/go-storage-lock"
 )
 
 func main() {
-    // 1. 创建 Storage
-    storage, err := mysql_storage.NewMysqlStorage(mysql_storage.NewMysqlStorageOptions{
-        Host:     "127.0.0.1",
-        Port:     3306,
-        Username: "root",
-        Password: "password",
-        Database: "test",
-    })
+    ctx := context.Background()
+
+    // 1. 创建 Storage。内存存储只在单进程内协调，换成 MySQL/Redis/etcd 等
+    //    满足线性一致 CAS 的后端才是跨主机的分布式锁。
+    store := memory_storage.NewMemoryStorage()
+
+    // 2. 创建锁
+    lock, err := storage_lock.NewStorageLock(store, "my-lock-key")
     if err != nil {
         log.Fatal(err)
     }
 
-    // 2. 创建 Lock
-    lock, err := mysql_locks.NewMysqlLocks(mysql_locks.NewMysqlLocksOptions{
-        Storage: storage,
-    })
-    if err != nil {
+    // 3. 加锁。ownerId 是这个调用方的身份，重入和续租都按它记账。
+    owner := lock.NewOwnerId()
+    if err := lock.Lock(ctx, owner); err != nil {
         log.Fatal(err)
     }
+    defer lock.UnLock(ctx, owner)
 
-    // 3. 加锁
-    err = lock.Lock(context.Background(), "my-lock-key")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer lock.Unlock(context.Background(), "my-lock-key")
+    // 4. 执行业务逻辑。需要跨进程安全时，用 fencing token 原子校验资源写入。
+}
+```
 
-    // 4. 执行业务逻辑...
+各存储后端有各自的 `go-*-locks` 便利封装，用法相同。例如 MySQL 用 DSN：
+
+```go
+lock, err := mysql_locks.NewMysqlLockByDsn(ctx, "user:pass@tcp(127.0.0.1:3306)/db", "my-lock-key")
+if err != nil {
+    log.Fatal(err)
 }
 ```
 
@@ -91,7 +91,7 @@ func main() {
 | SQLite3 | [go-sqlite3-storage](https://github.com/storage-lock/go-sqlite3-storage) |
 | OceanBase | [go-oceanbase-storage](https://github.com/storage-lock/go-oceanbase-storage) |
 | 达梦 | [go-dameng-storage](https://github.com/storage-lock/go-dameng-storage) |
-| ClickHouse | [go-clickhouse-storage](https://github.com/storage-lock/go-clickhouse-storage) |
+| ClickHouse ⚠️ | [go-clickhouse-storage](https://github.com/storage-lock/go-clickhouse-storage) — 无线性一致 CAS，**不能用作锁后端** |
 
 ### ORM 框架
 
