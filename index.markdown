@@ -78,6 +78,10 @@ if err != nil {
 
 ## 🗄️ 支持的存储后端
 
+下表列出**已有的实现**，不代表全部可直接建锁。能否用作锁后端取决于它是否真的满足
+单 key 线性一致 CAS 与可信时间源：不满足的实现不会声明 `CapabilityCAS`，
+`NewStorageLock` 会直接拒绝，而不是给出一个会误判互斥的锁。标 ⚠️ 的需要特别注意。
+
 ### 关系型数据库
 
 | 存储 | 包 |
@@ -144,14 +148,14 @@ if err != nil {
 
 ### 分布式文件系统
 
-| 存储 | 包 |
-|------|---|
-| HDFS | [go-hdfs-storage](https://github.com/storage-lock/go-hdfs-storage) |
-| GlusterFS | [go-glusterfs-storage](https://github.com/storage-lock/go-glusterfs-storage) |
-| JuiceFS | [go-juicefs-storage](https://github.com/storage-lock/go-juicefs-storage) |
-| FastDFS | [go-fastdfs-storage](https://github.com/storage-lock/go-fastdfs-storage) |
-| MooseFS | [go-moosefs-storage](https://github.com/storage-lock/go-moosefs-storage) |
-| FTP | [go-ftp-storage](https://github.com/storage-lock/go-ftp-storage) |
+| 存储 | 包 | 说明 |
+|------|---|------|
+| HDFS | [go-hdfs-storage](https://github.com/storage-lock/go-hdfs-storage) | S3 兼容网关 |
+| GlusterFS | [go-glusterfs-storage](https://github.com/storage-lock/go-glusterfs-storage) | S3 兼容网关 |
+| JuiceFS | [go-juicefs-storage](https://github.com/storage-lock/go-juicefs-storage) | S3 兼容接口 |
+| FastDFS | [go-fastdfs-storage](https://github.com/storage-lock/go-fastdfs-storage) | S3 兼容接口 |
+| MooseFS | [go-moosefs-storage](https://github.com/storage-lock/go-moosefs-storage) | S3 兼容网关 |
+| FTP | [go-ftp-storage](https://github.com/storage-lock/go-ftp-storage) | ⚠️ 占位实现，**不能用作锁后端** |
 
 ---
 
